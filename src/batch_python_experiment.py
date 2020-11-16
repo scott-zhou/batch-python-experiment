@@ -396,7 +396,7 @@ def _upload_source_files(blob_client, container_name):
     """
     # Create a list of all Python source files
     source_code_paths = []
-    for folder, subs, files in os.walk(os.path.join(sys.path[0], config._JOB_SCRIPT_PATH)):
+    for folder, _, files in os.walk(os.path.join(sys.path[0], config._JOB_SCRIPT_PATH)):
         for filename in files:
             if filename.endswith(".py"):
                 source_code_paths.append(os.path.abspath(
