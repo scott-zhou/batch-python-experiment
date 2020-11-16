@@ -9,8 +9,6 @@ if __name__ == '__main__':
     parser.add_argument('output', type=str,
                         help='Input job definations')
     args = parser.parse_args()
-    print(args.input)
-    print(args.output)
     output = 0
     with open(args.input) as fd:
         for line in fd:
@@ -25,4 +23,4 @@ if __name__ == '__main__':
                 time.sleep(1)
     print()
     with open(args.output, "w") as fd:
-        print('The sum is {}'.format(output), file=fd)
+        fd.write(f'The sum is {output}')

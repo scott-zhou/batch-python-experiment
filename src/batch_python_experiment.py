@@ -220,14 +220,13 @@ def create_job(batch_service_client, job_id, pool_id):
     batch_service_client.job.add(job)
 
 
-def add_tasks(batch_service_client, job_id, job_entry, source_files, input_files, output_container_sas_url):
+def add_tasks(batch_service_client, job_id, source_files, input_files, output_container_sas_url):
     """
     Adds a task for each input file in the collection to the specified job.
 
     :param batch_service_client: A Batch service client.
     :type batch_service_client: `azure.batch.BatchServiceClient`
     :param str job_id: The ID of the job to which to add the tasks.
-    :param ResourceFile job_entry: The main entry of Python script.
     :param list source_files: A collection of source files.
     :param list input_files: A collection of input files. One task will be
      created for each input file.
@@ -238,12 +237,11 @@ def add_tasks(batch_service_client, job_id, job_entry, source_files, input_files
     print('Adding {} tasks to job [{}]...'.format(len(input_files), job_id))
 
     tasks = list()
-    job_entry_path = job_entry.file_path
     for idx, input_file in enumerate(input_files):
         input_file_path = input_file.file_path
         output_file_path = "".join(
             (os.path.basename(input_file_path)).split('.')[:-1]) + 'output.txt'
-        command = f"/bin/bash -c \"ls -l && python3.7 {job_entry_path} {input_file_path} {output_file_path}\""
+        command = f"/bin/bash -c \"python3.7 {config._TASK_ENTRY_SCRIPT} {input_file_path} {output_file_path}\""
         tasks.append(batch.models.TaskAddParameter(
             id='Task{}'.format(idx),
             command_line=command,
@@ -294,12 +292,15 @@ def wait_for_tasks_to_complete(batch_service_client, job_id, timeout):
                        "timeout period of " + str(timeout))
 
 
-def print_task_output(batch_service_client, job_id, encoding=None):
-    """Prints the stdout.txt file for each task in the job.
+def print_task_output(batch_service_client, job_id, blob_client, output_container_name, encoding=None):
+    """Prints the stdout, stderr and output files for each task in the job.
 
-    :param batch_client: The batch client to use.
-    :type batch_client: `batchserviceclient.BatchServiceClient`
+    :param batch_service_client: The batch client to use.
+    :type batch_service_client: `batchserviceclient.BatchServiceClient`
     :param str job_id: The id of the job with task output files to print.
+    :param blob_client: A blob service client.
+    :type blob_client: `azure.storage.blob.BlockBlobService`
+    :param str output_container_name: The name for output container
     """
 
     print('Printing task output...')
@@ -331,6 +332,13 @@ def print_task_output(batch_service_client, job_id, encoding=None):
         print("Error output:")
         print(file_text)
 
+        for outputfile in task.output_files:
+            output = io.BytesIO()
+            blob_client.get_blob_to_stream(
+                output_container_name, outputfile.file_pattern, output)
+            print(f"Output file {outputfile.file_pattern}:")
+            print(output.getvalue().decode('utf-8'))
+
 
 def _read_stream_as_string(stream, encoding):
     """Read stream as string
@@ -352,6 +360,56 @@ def _read_stream_as_string(stream, encoding):
     raise RuntimeError('could not write data to stream or decode bytes')
 
 
+def _upload_input_files(blob_client, container_name):
+    """Upload input files to Azure Storage Account
+
+    :param blob_client: A blob service client.
+    :type blob_client: `azure.storage.blob.BlockBlobService`
+    :param str container_name: The name of the Azure Blob storage container.
+    :rtype: list
+    :return: A collection of input files.
+    """
+    # Create a list of all job defination files in the inputFiles directory.
+    input_file_paths = []
+
+    for folder, _, files in os.walk(os.path.join(sys.path[0], config._JOB_INPUT_PATH)):
+        for filename in files:
+            if filename.endswith(".txt"):
+                input_file_paths.append(os.path.abspath(
+                    os.path.join(folder, filename)))
+
+    # Upload the input files. This is the collection of files that are to be processed by the tasks.
+    return [
+        upload_file_to_container(
+            blob_client, container_name, file_path, config._JOB_INPUT_PATH)
+        for file_path in input_file_paths]
+
+
+def _upload_source_files(blob_client, container_name):
+    """Upload script source files to Azure Storage Account
+
+    :param blob_client: A blob service client.
+    :type blob_client: `azure.storage.blob.BlockBlobService`
+    :param str container_name: The name of the Azure Blob storage container.
+    :rtype: list
+    :return: A collection of script source files.
+    """
+    # Create a list of all Python source files
+    source_code_paths = []
+    for folder, subs, files in os.walk(os.path.join(sys.path[0], config._JOB_SCRIPT_PATH)):
+        for filename in files:
+            if filename.endswith(".py"):
+                source_code_paths.append(os.path.abspath(
+                    os.path.join(folder, filename)))
+
+    # Upload the source files, and set the job.py as main entry
+    return [
+        upload_file_to_container(
+            blob_client, container_name, file_path, config._JOB_SCRIPT_PATH)
+        for file_path in source_code_paths
+    ]
+
+
 if __name__ == '__main__':
 
     start_time = datetime.datetime.now().replace(microsecond=0)
@@ -369,50 +427,23 @@ if __name__ == '__main__':
     # don't yet exist.
 
     input_container_name = f'input-{int(start_time.timestamp())}'
-    output_container_name = f'output-{int(start_time.timestamp())}'
     blob_client.create_container(input_container_name, fail_on_exist=False)
-    blob_client.create_container(output_container_name, fail_on_exist=False)
     print('Container [{}] created.'.format(input_container_name))
+
+    output_container_name = f'output-{int(start_time.timestamp())}'
+    blob_client.create_container(output_container_name, fail_on_exist=False)
     print('Container [{}] created.'.format(output_container_name))
 
-    # Create a list of all job defination files in the inputFiles directory.
-    input_file_paths = []
+    input_files = _upload_input_files(blob_client, input_container_name)
 
-    for folder, subs, files in os.walk(os.path.join(sys.path[0], 'inputFiles')):
-        for filename in files:
-            if filename.endswith(".txt"):
-                input_file_paths.append(os.path.abspath(
-                    os.path.join(folder, filename)))
-
-    # Upload the input files. This is the collection of files that are to be processed by the tasks.
-    input_files = [
-        upload_file_to_container(
-            blob_client, input_container_name, file_path, 'inputFiles')
-        for file_path in input_file_paths]
-
-    # Create a list of all Python source files
-    source_code_paths = []
-    for folder, subs, files in os.walk(os.path.join(sys.path[0], 'sourceFiles')):
-        for filename in files:
-            if filename.endswith(".py"):
-                source_code_paths.append(os.path.abspath(
-                    os.path.join(folder, filename)))
-
-    # Upload the source files, and set the job.py as main entry
-    job_main_entry = None
-    source_files = []
-    for file_path in source_code_paths:
-        res_file = upload_file_to_container(
-            blob_client, input_container_name, file_path, 'sourceFiles')
-        source_files.append(res_file)
-        if os.path.basename(file_path) == "job.py":
-            job_main_entry = res_file
-    if not job_main_entry:
-        raise RuntimeError("ERROR: Die not find job entry source code file")
+    source_files = _upload_source_files(blob_client, input_container_name)
+    if not any(
+        os.path.basename(f.file_path) == os.path.basename(config._TASK_ENTRY_SCRIPT) for f in source_files
+    ):
+        raise RuntimeError("ERROR: Did not find job entry source code file")
 
     # Obtain a shared access signature URL that provides write access to the output
     # container to which the tasks will upload their output.
-
     output_container_sas_url = get_container_sas_url(
         blob_client,
         output_container_name,
@@ -430,8 +461,7 @@ if __name__ == '__main__':
     batch_pool_id = f"{config._POOL_ID}_{int(start_time.timestamp())}"
     job_id = f"{config._JOB_ID}_{int(start_time.timestamp())}"
     try:
-        # Create the pool that will contain the compute nodes that will execute the
-        # tasks.
+        # Create the pool that will contain the compute nodes that will execute the tasks.
         create_pool(batch_client, batch_pool_id)
 
         # Create the job that will run the tasks.
@@ -439,7 +469,7 @@ if __name__ == '__main__':
 
         # Add the tasks to the job. Pass the input files and a SAS URL
         # to the storage container for output files.
-        add_tasks(batch_client, job_id, job_main_entry, source_files,
+        add_tasks(batch_client, job_id, source_files,
                   input_files, output_container_sas_url)
 
         # Pause execution until tasks reach Completed state.
@@ -450,8 +480,9 @@ if __name__ == '__main__':
         print("  Success! All tasks reached the 'Completed' state within the "
               "specified timeout period.")
 
-        # Print the stdout.txt and stderr.txt files for each task to the console
-        print_task_output(batch_client, job_id)
+        # Print the stdout, stderr, and output files for each task to the console
+        print_task_output(batch_client, job_id, blob_client,
+                          output_container_name)
 
     except batchmodels.BatchErrorException as err:
         print_batch_exception(err)

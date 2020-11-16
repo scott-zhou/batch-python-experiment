@@ -23,3 +23,6 @@ _POOL_VM_SIZE = 'STANDARD_A1_v2'
 _JOB_ID = 'BatchExperimentJob'
 _STANDARD_OUT_FILE_NAME = 'stdout.txt'  # Standard Output file
 _ERROR_OUT_FILE_NAME = 'stderr.txt'  # Error Output file
+_JOB_INPUT_PATH = 'inputFiles'
+_JOB_SCRIPT_PATH = 'sourceFiles'
+_TASK_ENTRY_SCRIPT = _JOB_SCRIPT_PATH + '/job.py'
