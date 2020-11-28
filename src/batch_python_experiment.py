@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import config
+from typing import List, Generator
 
 try:
     input = raw_input
@@ -23,14 +24,13 @@ sys.path.append('..')
 # for the Batch and Storage client objects.
 
 
-def query_yes_no(question, default="yes"):
+def query_yes_no(question: str, default: str = "yes") -> str:
     """
     Prompts the user for yes/no input, displaying the specified question text.
 
-    :param str question: The text of the prompt for input.
-    :param str default: The default if the user hits <ENTER>. Acceptable values
+    :param question: The text of the prompt for input.
+    :param default: The default if the user hits <ENTER>. Acceptable values
     are 'yes', 'no', and None.
-    :rtype: str
     :return: 'yes' or 'no'
     """
     valid = {'y': 'yes', 'n': 'no'}
@@ -53,11 +53,10 @@ def query_yes_no(question, default="yes"):
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 
-def print_batch_exception(batch_exception):
+def print_batch_exception(
+        batch_exception: batchmodels.BatchErrorException) -> None:
     """
     Prints the contents of the specified Batch exception.
-
-    :param batch_exception:
     """
     print('-------------------------------------------')
     print('Exception encountered:')
@@ -72,16 +71,18 @@ def print_batch_exception(batch_exception):
     print('-------------------------------------------')
 
 
-def upload_file_to_container(block_blob_client, container_name, file_path, folder=None):
+def upload_file_to_container(
+        block_blob_client: azureblob.BlockBlobService,
+        container_name: str,
+        file_path: str,
+        folder: str = None) -> batchmodels.ResourceFile:
     """
     Uploads a local file to an Azure Blob storage container.
 
     :param block_blob_client: A blob service client.
-    :type block_blob_client: `azure.storage.blob.BlockBlobService`
-    :param str container_name: The name of the Azure Blob storage container.
-    :param str file_path: The local path to the file.
-    :param str folder: The folder on container to store the file, default None.
-    :rtype: `azure.batch.models.ResourceFile`
+    :param container_name: The name of the Azure Blob storage container.
+    :param file_path: The local path to the file.
+    :param folder: The folder on container to store the file, default None.
     :return: A ResourceFile initialized with a SAS URL appropriate for Batch
     tasks.
     """
@@ -109,17 +110,17 @@ def upload_file_to_container(block_blob_client, container_name, file_path, folde
                                     http_url=sas_url)
 
 
-def get_container_sas_token(block_blob_client,
-                            container_name, blob_permissions):
+def get_container_sas_token(
+        block_blob_client: azureblob.BlockBlobService,
+        container_name: str,
+        blob_permissions: azureblob.BlobPermissions) -> str:
     """
     Obtains a shared access signature granting the specified permissions to the
     container.
 
     :param block_blob_client: A blob service client.
-    :type block_blob_client: `azure.storage.blob.BlockBlobService`
-    :param str container_name: The name of the Azure Blob storage container.
-    :param BlobPermissions blob_permissions:
-    :rtype: str
+    :param container_name: The name of the Azure Blob storage container.
+    :param blob_permissions:
     :return: A SAS token granting the specified permissions to the container.
     """
     # Obtain the SAS token for the container, setting the expiry time and
@@ -134,17 +135,17 @@ def get_container_sas_token(block_blob_client,
     return container_sas_token
 
 
-def get_container_sas_url(block_blob_client,
-                          container_name, blob_permissions):
+def get_container_sas_url(
+        block_blob_client: azureblob.BlockBlobService,
+        container_name: str,
+        blob_permissions: azureblob.BlobPermissions) -> str:
     """
     Obtains a shared access signature URL that provides write access to the
     ouput container to which the tasks will upload their output.
 
     :param block_blob_client: A blob service client.
-    :type block_blob_client: `azure.storage.blob.BlockBlobService`
-    :param str container_name: The name of the Azure Blob storage container.
-    :param BlobPermissions blob_permissions:
-    :rtype: str
+    :param container_name: The name of the Azure Blob storage container.
+    :param blob_permissions:
     :return: A SAS URL granting the specified permissions to the container.
     """
     # Obtain the SAS token for the container.
@@ -158,16 +159,20 @@ def get_container_sas_url(block_blob_client,
     return container_sas_url
 
 
-def create_pool(batch_service_client, pool_id):
+def create_pool(
+        batch_service_client: batch.BatchServiceClient,
+        pool_id: str,
+        publisher: str = "Canonical",
+        offer: str = "UbuntuServer",
+        sku: str = "18.04-LTS") -> None:
     """
     Creates a pool of compute nodes with the specified OS settings.
 
     :param batch_service_client: A Batch service client.
-    :type batch_service_client: `azure.batch.BatchServiceClient`
-    :param str pool_id: An ID for the new pool.
-    :param str publisher: Marketplace image publisher
-    :param str offer: Marketplace image offer
-    :param str sku: Marketplace image sky
+    :param pool_id: An ID for the new pool.
+    :param publisher: Marketplace image publisher
+    :param offer: Marketplace image offer
+    :param sku: Marketplace image sky
     """
     print('Creating pool [{}]...'.format(pool_id))
 
@@ -180,9 +185,9 @@ def create_pool(batch_service_client, pool_id):
         id=pool_id,
         virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
             image_reference=batchmodels.ImageReference(
-                publisher="Canonical",
-                offer="UbuntuServer",
-                sku="18.04-LTS",
+                publisher=publisher,
+                offer=offer,
+                sku=sku,
                 version="latest"
             ),
             node_agent_sku_id="batch.node.ubuntu 18.04"),
@@ -198,18 +203,19 @@ def create_pool(batch_service_client, pool_id):
                     elevation_level=batchmodels.ElevationLevel.admin)),
         )
     )
-
     batch_service_client.pool.add(new_pool)
 
 
-def create_job(batch_service_client, job_id, pool_id):
+def create_job(
+        batch_service_client: batch.BatchServiceClient,
+        job_id: str,
+        pool_id: str) -> None:
     """
     Creates a job with the specified ID, associated with the specified pool.
 
     :param batch_service_client: A Batch service client.
-    :type batch_service_client: `azure.batch.BatchServiceClient`
-    :param str job_id: The ID for the job.
-    :param str pool_id: The ID for the pool.
+    :param job_id: The ID for the job.
+    :param pool_id: The ID for the pool.
     """
     print('Creating job [{}]...'.format(job_id))
 
@@ -220,18 +226,22 @@ def create_job(batch_service_client, job_id, pool_id):
     batch_service_client.job.add(job)
 
 
-def add_tasks(batch_service_client, job_id, source_files, input_files, output_container_sas_url):
+def add_tasks(
+        batch_service_client: batch.BatchServiceClient,
+        job_id: str,
+        source_files: List[batchmodels.ResourceFile],
+        input_files: List[batchmodels.ResourceFile],
+        output_container_sas_url: str) -> None:
     """
     Adds a task for each input file in the collection to the specified job.
 
     :param batch_service_client: A Batch service client.
-    :type batch_service_client: `azure.batch.BatchServiceClient`
-    :param str job_id: The ID of the job to which to add the tasks.
-    :param list source_files: A collection of source files.
-    :param list input_files: A collection of input files. One task will be
-     created for each input file.
-    :param output_container_sas_token: A SAS token granting write access to
-    the specified Azure Blob storage container.
+    :param job_id: The ID of the job to which to add the tasks.
+    :param source_files: A collection of source files.
+    :param input_files: A collection of input files. One task will be created
+     for each input file.
+    :param output_container_sas_url: A SAS URL granting the specified
+     permissions to the output container.
     """
 
     print('Adding {} tasks to job [{}]...'.format(len(input_files), job_id))
@@ -247,32 +257,35 @@ def add_tasks(batch_service_client, job_id, source_files, input_files, output_co
             f"python3.7 -m pip install -r {config._JOB_SCRIPT_PATH}/requirements.txt && "\
             f"python3.7 {config._TASK_ENTRY_SCRIPT} {input_file_path} {output_file_path}"\
             "\""
-        tasks.append(batch.models.TaskAddParameter(
-            id='Task{}'.format(idx),
-            command_line=command,
-            resource_files=source_files+[input_file],
-            output_files=[batchmodels.OutputFile(
-                file_pattern=output_file_path,
-                destination=batchmodels.OutputFileDestination(
-                          container=batchmodels.OutputFileBlobContainerDestination(
+        tasks.append(
+            batch.models.TaskAddParameter(
+                id='Task{}'.format(idx),
+                command_line=command,
+                resource_files=source_files+[input_file],
+                output_files=[batchmodels.OutputFile(
+                    file_pattern=output_file_path,
+                    destination=batchmodels.OutputFileDestination(
+                        container=batchmodels.OutputFileBlobContainerDestination(
                               container_url=output_container_sas_url)),
-                upload_options=batchmodels.OutputFileUploadOptions(
-                    upload_condition=batchmodels.OutputFileUploadCondition.task_success))]
-        )
+                    upload_options=batchmodels.OutputFileUploadOptions(
+                        upload_condition=batchmodels.OutputFileUploadCondition.task_success))]
+            )
         )
     batch_service_client.task.add_collection(job_id, tasks)
 
 
-def wait_for_tasks_to_complete(batch_service_client, job_id, timeout):
+def wait_for_tasks_to_complete(
+        batch_service_client: batch.BatchServiceClient,
+        job_id: str,
+        timeout: datetime.timedelta) -> None:
     """
     Returns when all tasks in the specified job reach the Completed state.
 
     :param batch_service_client: A Batch service client.
-    :type batch_service_client: `azure.batch.BatchServiceClient`
-    :param str job_id: The id of the job whose tasks should be monitored.
-    :param timedelta timeout: The duration to wait for task completion. If all
-    tasks in the specified job do not reach Completed state within this time
-    period, an exception will be raised.
+    :param job_id: The id of the job whose tasks should be monitored.
+    :param timeout: The duration to wait for task completion. If all
+     tasks in the specified job do not reach Completed state within this time
+     period, an exception will be raised.
     """
     timeout_expiration = datetime.datetime.now() + timeout
 
@@ -297,15 +310,19 @@ def wait_for_tasks_to_complete(batch_service_client, job_id, timeout):
                        "timeout period of " + str(timeout))
 
 
-def print_task_output(batch_service_client, job_id, blob_client, output_container_name, encoding=None):
+def print_task_output(
+        batch_service_client: batch.BatchServiceClient,
+        job_id: str,
+        blob_client: azureblob.BlockBlobService,
+        output_container_name: str,
+        encoding: str = None) -> None:
     """Prints the stdout, stderr and output files for each task in the job.
 
     :param batch_service_client: The batch client to use.
-    :type batch_service_client: `batchserviceclient.BatchServiceClient`
-    :param str job_id: The id of the job with task output files to print.
+    :param job_id: The id of the job with task output files to print.
     :param blob_client: A blob service client.
-    :type blob_client: `azure.storage.blob.BlockBlobService`
-    :param str output_container_name: The name for output container
+    :param output_container_name: The name for output container
+    :param encoding: The encoding of the file. The default is utf-8.
     """
 
     print('Printing task output...')
@@ -355,13 +372,12 @@ def print_task_output(batch_service_client, job_id, blob_client, output_containe
         print(f"{m[1]:<25}{m[0]}")
 
 
-def _read_stream_as_string(stream, encoding):
+def _read_stream_as_string(stream: Generator, encoding: str) -> str:
     """Read stream as string
 
     :param stream: input stream generator
-    :param str encoding: The encoding of the file. The default is utf-8.
+    :param encoding: The encoding of the file. The default is utf-8.
     :return: The file content.
-    :rtype: str
     """
     output = io.BytesIO()
     try:
@@ -375,13 +391,13 @@ def _read_stream_as_string(stream, encoding):
     raise RuntimeError('could not write data to stream or decode bytes')
 
 
-def _upload_input_files(blob_client, container_name):
+def _upload_input_files(
+        blob_client: azureblob.BlockBlobService,
+        container_name: str) -> List[batchmodels.ResourceFile]:
     """Upload input files to Azure Storage Account
 
     :param blob_client: A blob service client.
-    :type blob_client: `azure.storage.blob.BlockBlobService`
-    :param str container_name: The name of the Azure Blob storage container.
-    :rtype: list
+    :param container_name: The name of the Azure Blob storage container.
     :return: A collection of input files.
     """
     # Create a list of all job defination files in the inputFiles directory.
@@ -400,13 +416,13 @@ def _upload_input_files(blob_client, container_name):
         for file_path in input_file_paths]
 
 
-def _upload_source_files(blob_client, container_name):
+def _upload_source_files(
+        blob_client: azureblob.BlockBlobService,
+        container_name: str) -> List[batchmodels.ResourceFile]:
     """Upload script source files to Azure Storage Account
 
     :param blob_client: A blob service client.
-    :type blob_client: `azure.storage.blob.BlockBlobService`
-    :param str container_name: The name of the Azure Blob storage container.
-    :rtype: list
+    :param container_name: The name of the Azure Blob storage container.
     :return: A collection of script source files.
     """
     # Create a list of all Python source files
