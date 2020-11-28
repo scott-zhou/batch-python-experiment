@@ -18,11 +18,11 @@ _STORAGE_ACCOUNT_KEY = ''
 
 _POOL_ID = 'BatchExperimentPool'
 _DEDICATED_POOL_NODE_COUNT = 0
-_LOW_PRIORITY_POOL_NODE_COUNT = 2
-_POOL_VM_SIZE = 'STANDARD_A1_v2'
+_LOW_PRIORITY_POOL_NODE_COUNT = 4
+_POOL_VM_SIZE = 'STANDARD_A2_v2'
 _JOB_ID = 'BatchExperimentJob'
 _STANDARD_OUT_FILE_NAME = 'stdout.txt'  # Standard Output file
 _ERROR_OUT_FILE_NAME = 'stderr.txt'  # Error Output file
 _JOB_INPUT_PATH = 'inputFiles'
 _JOB_SCRIPT_PATH = 'sourceFiles'
-_TASK_ENTRY_SCRIPT = _JOB_SCRIPT_PATH + '/job.py'
+_TASK_ENTRY_SCRIPT = _JOB_SCRIPT_PATH + '/boston_house_price.py'

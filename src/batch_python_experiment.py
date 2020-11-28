@@ -190,7 +190,7 @@ def create_pool(batch_service_client, pool_id):
         target_dedicated_nodes=config._DEDICATED_POOL_NODE_COUNT,
         target_low_priority_nodes=config._LOW_PRIORITY_POOL_NODE_COUNT,
         start_task=batchmodels.StartTask(
-            command_line="/bin/bash -c \"apt-get update && apt-get -y install python3.7\"",
+            command_line="/bin/bash -c \"apt-get update && apt-get -y install python3.7 python3-pip\"",
             wait_for_success=True,
             user_identity=batchmodels.UserIdentity(
                 auto_user=batchmodels.AutoUserSpecification(
@@ -241,7 +241,12 @@ def add_tasks(batch_service_client, job_id, source_files, input_files, output_co
         input_file_path = input_file.file_path
         output_file_path = "".join(
             (os.path.basename(input_file_path)).split('.')[:-1]) + 'output.txt'
-        command = f"/bin/bash -c \"python3.7 {config._TASK_ENTRY_SCRIPT} {input_file_path} {output_file_path}\""
+        command = "/bin/bash -c \""\
+            "python3.7 -m pip install --upgrade pip && "\
+            "python3.7 -m pip install wheel && "\
+            f"python3.7 -m pip install -r {config._JOB_SCRIPT_PATH}/requirements.txt && "\
+            f"python3.7 {config._TASK_ENTRY_SCRIPT} {input_file_path} {output_file_path}"\
+            "\""
         tasks.append(batch.models.TaskAddParameter(
             id='Task{}'.format(idx),
             command_line=command,
@@ -307,6 +312,8 @@ def print_task_output(batch_service_client, job_id, blob_client, output_containe
 
     tasks = batch_service_client.task.list(job_id)
 
+    models = []
+
     for task in tasks:
 
         node_id = batch_service_client.task.get(
@@ -336,8 +343,16 @@ def print_task_output(batch_service_client, job_id, blob_client, output_containe
             output = io.BytesIO()
             blob_client.get_blob_to_stream(
                 output_container_name, outputfile.file_pattern, output)
+            file_content = output.getvalue().decode('utf-8')
             print(f"Output file {outputfile.file_pattern}:")
-            print(output.getvalue().decode('utf-8'))
+            print(file_content)
+            name, score, *_ = file_content.splitlines()
+            score = float(score.split(": ")[1])
+            models.append((score, name))
+    print("\n\nEvaluation and comparision of all the models:")
+    print(f"{'Model':<25}R-squared Score")
+    for m in sorted(models, reverse=True):
+        print(f"{m[1]:<25}{m[0]}")
 
 
 def _read_stream_as_string(stream, encoding):
@@ -398,7 +413,7 @@ def _upload_source_files(blob_client, container_name):
     source_code_paths = []
     for folder, _, files in os.walk(os.path.join(sys.path[0], config._JOB_SCRIPT_PATH)):
         for filename in files:
-            if filename.endswith(".py"):
+            if filename.endswith(".py") or filename == "requirements.txt":
                 source_code_paths.append(os.path.abspath(
                     os.path.join(folder, filename)))
 
@@ -435,6 +450,8 @@ if __name__ == '__main__':
     print('Container [{}] created.'.format(output_container_name))
 
     input_files = _upload_input_files(blob_client, input_container_name)
+    config._LOW_PRIORITY_POOL_NODE_COUNT = len(
+        input_files)  # Change pool size from num of input
 
     source_files = _upload_source_files(blob_client, input_container_name)
     if not any(
