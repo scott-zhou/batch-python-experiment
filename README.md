@@ -1,6 +1,6 @@
 ---
 page_type: sample
-description: "A Python application that uses Batch to execute Python code."
+description: "A Python application uses Azure Batch to execute Boston House Price ML model evaluation."
 languages:
 - python
 products:
@@ -9,7 +9,7 @@ products:
 
 # Python Azure Batch execute Python script
 
-A Python application that uses Azure Batch to execute Python source code
+A Python application that uses Azure Batch to execute Boston House Price with different ML models.
 
 ## Prerequisites
 
