@@ -471,7 +471,7 @@ if __name__ == '__main__':
 
     source_files = _upload_source_files(blob_client, input_container_name)
     if not any(
-        os.path.basename(f.file_path) == os.path.basename(config._TASK_ENTRY_SCRIPT) for f in source_files
+        os.path.basename(f.file_path) == config._TASK_ENTRY_SCRIPT.name for f in source_files
     ):
         raise RuntimeError("ERROR: Did not find job entry source code file")
 
