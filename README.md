@@ -9,8 +9,7 @@ products:
 
 # Python Azure Batch execute Python script
 
-A Python application that uses Azure Batch to execute Boston House Price with different ML models.
-This is the source for sample [Run Python Program in Azure Batch](https://scott-zhou.gitbook.io/run-python-program-in-azure-batch/)
+A Python application that uses Azure Batch to execute Boston House Price with different ML models. This is the source code for sample [Run Python Program in Azure Batch](https://scott-zhou.gitbook.io/run-python-program-in-azure-batch/)
 
 ## Prerequisites
 
